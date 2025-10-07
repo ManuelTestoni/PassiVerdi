@@ -2,46 +2,109 @@
 //  Activity.swift
 //  PassiVerdi
 //
-//  Created on 06/10/2025.
+//  Created on 07/10/2025.
+//  Copyright © 2025 PassiVerdi. All rights reserved.
 //
 
 import Foundation
 import CoreLocation
 
+/**
+ # Activity
+ 
+ Modello che rappresenta un'attività di spostamento tracciata.
+ 
+ ## Tipologie:
+ - Walking (a piedi)
+ - Cycling (bicicletta)
+ - PublicTransport (trasporto pubblico)
+ - Car (automobile - non sostenibile)
+ - Unknown (non determinato)
+ 
+ ## Calcoli:
+ - Punti assegnati in base al tipo di trasporto
+ - CO₂ risparmiata rispetto all'uso dell'auto
+ */
 struct Activity: Identifiable, Codable {
-    var id: UUID = UUID()
-    var transportType: TransportType
-    var distance: Double // in kilometers
-    var duration: TimeInterval // in seconds
-    var startTime: Date
-    var endTime: Date
-    var route: [CLLocationCoordinate2D]?
-    var co2Saved: Double // in kg
-    var pointsEarned: Int
     
-    var formattedDistance: String {
-        String(format: "%.2f km", distance)
+    // MARK: - Properties
+    
+    /// ID univoco dell'attività
+    var id: UUID = UUID()
+    
+    /// Tipo di trasporto utilizzato
+    var transportType: TransportType
+    
+    /// Distanza percorsa in km
+    var distance: Double
+    
+    /// Data e ora di inizio attività
+    var startDate: Date
+    
+    /// Data e ora di fine attività
+    var endDate: Date
+    
+    /// Coordinate di inizio (opzionale)
+    var startLocation: CLLocationCoordinate2D?
+    
+    /// Coordinate di fine (opzionale)
+    var endLocation: CLLocationCoordinate2D?
+    
+    // MARK: - Computed Properties
+    
+    /// Durata dell'attività in minuti
+    var duration: TimeInterval {
+        endDate.timeIntervalSince(startDate)
     }
     
+    /// Punti verdi guadagnati per questa attività
+    var pointsEarned: Int {
+        transportType.pointsPerKm * Int(distance)
+    }
+    
+    /// CO₂ risparmiata rispetto all'uso dell'auto (in kg)
+    var co2Saved: Double {
+        // Emissioni medie auto: 120g CO₂/km
+        // Emissioni mezzi pubblici: 40g CO₂/km
+        let carEmissions = 0.12 // kg per km
+        
+        switch transportType {
+        case .walking, .cycling:
+            return distance * carEmissions
+        case .publicTransport:
+            return distance * (carEmissions - 0.04)
+        case .car, .unknown:
+            return 0.0
+        }
+    }
+    
+    /// Descrizione formattata della durata
     var formattedDuration: String {
-        let hours = Int(duration) / 3600
-        let minutes = Int(duration) / 60 % 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
+        let minutes = Int(duration / 60)
+        if minutes < 60 {
+            return "\(minutes) min"
         } else {
-            return "\(minutes) minuti"
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            return "\(hours)h \(remainingMinutes)m"
         }
     }
 }
 
+// MARK: - TransportType Enum
+
+/**
+ Enum che rappresenta i diversi tipi di trasporto
+ */
 enum TransportType: String, Codable, CaseIterable {
     case walking = "A piedi"
     case cycling = "Bicicletta"
-    case publicTransport = "Mezzi pubblici"
+    case publicTransport = "Trasporto pubblico"
     case car = "Auto"
-    case carpool = "Carpooling"
+    case unknown = "Sconosciuto"
     
-    var iconName: String {
+    /// Icona SF Symbol associata
+    var icon: String {
         switch self {
         case .walking:
             return "figure.walk"
@@ -51,54 +114,75 @@ enum TransportType: String, Codable, CaseIterable {
             return "bus.fill"
         case .car:
             return "car.fill"
-        case .carpool:
-            return "person.3.fill"
+        case .unknown:
+            return "questionmark.circle"
         }
     }
     
-    var color: String {
-        switch self {
-        case .walking, .cycling:
-            return "green"
-        case .publicTransport, .carpool:
-            return "yellow"
-        case .car:
-            return "red"
-        }
-    }
-    
-    // CO2 emessa per km (in grammi)
-    var co2PerKm: Double {
-        switch self {
-        case .walking, .cycling:
-            return 0
-        case .publicTransport:
-            return 68
-        case .carpool:
-            return 85
-        case .car:
-            return 170
-        }
-    }
-    
-    // Punti guadagnati per km
+    /// Punti verdi assegnati per km
     var pointsPerKm: Int {
         switch self {
         case .walking:
-            return 15
+            return 10
         case .cycling:
-            return 12
-        case .publicTransport:
             return 8
-        case .carpool:
+        case .publicTransport:
             return 5
         case .car:
             return 0
+        case .unknown:
+            return 0
+        }
+    }
+    
+    /// Colore associato al tipo di trasporto
+    var color: String {
+        switch self {
+        case .walking:
+            return "green"
+        case .cycling:
+            return "blue"
+        case .publicTransport:
+            return "orange"
+        case .car:
+            return "red"
+        case .unknown:
+            return "gray"
         }
     }
 }
 
-// Extension per rendere CLLocationCoordinate2D codificabile
+// MARK: - Sample Data
+
+extension Activity {
+    
+    /// Attività di esempio per preview
+    static var samples: [Activity] {
+        [
+            Activity(
+                transportType: .walking,
+                distance: 2.5,
+                startDate: Date().addingTimeInterval(-3600),
+                endDate: Date().addingTimeInterval(-2700)
+            ),
+            Activity(
+                transportType: .cycling,
+                distance: 5.2,
+                startDate: Date().addingTimeInterval(-7200),
+                endDate: Date().addingTimeInterval(-6300)
+            ),
+            Activity(
+                transportType: .publicTransport,
+                distance: 12.0,
+                startDate: Date().addingTimeInterval(-86400),
+                endDate: Date().addingTimeInterval(-84600)
+            )
+        ]
+    }
+}
+
+// MARK: - CLLocationCoordinate2D Codable Extension
+
 extension CLLocationCoordinate2D: Codable {
     enum CodingKeys: String, CodingKey {
         case latitude
